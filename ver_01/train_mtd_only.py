@@ -26,8 +26,8 @@ def main(args):
     # PPO Agent
     # --- [핵심] 고정된 obs_dim, act_dim 사용 ---
     ppo_agent = PPO(
-        obs_dim=TESTBED_OBS_DIM,
-        act_dim=TESTBED_ACTION_DIM,
+        state_dim=TESTBED_OBS_DIM,    # <-- [수정] 'obs_dim' -> 'state_dim'
+        action_dim=TESTBED_ACTION_DIM, # <-- [수정] 'act_dim' -> 'action_dim'
         lr=args.lr,
         gamma=args.gamma,
         K_epochs=args.K_epochs,
