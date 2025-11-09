@@ -118,10 +118,12 @@ class PPO:
         # 2. 텐서로 변환
         rewards = torch.tensor(rewards, dtype=torch.float32).to(self.device)
         
-        # (수정) states 텐서 변환 (Array2Tensor와 동일한 로직)
-        old_states = torch.squeeze(torch.tensor(self.buffer.states, dtype=torch.float32).to(self.device), 1).detach()
+        # (수정) 
+        # 'torch.tensor(list_of_tensors)'는 오류를 유발합니다.
+        # 'torch.stack(list_of_tensors)'를 사용해야 합니다.
+        old_states = torch.stack(self.buffer.states).detach()
         old_actions = torch.tensor(self.buffer.actions, dtype=torch.long).to(self.device).detach()
-        old_logprobs = torch.tensor(self.buffer.logprobs, dtype=torch.float32).to(self.device).detach()
+        old_logprobs = torch.stack(self.buffer.logprobs).detach()
 
         # 3. K_epochs 동안 정책 업데이트
         for _ in range(self.K_epochs):
