@@ -10,6 +10,9 @@ Network Simulation Environment (v22)
 import numpy as np
 import random
 from config import TESTBED_OBS_DIM, TESTBED_ACTION_DIM
+# environment.py 상단 import들 아래에 추가
+from typing import Tuple
+
 
 class NetworkEnv:
     def __init__(self, args, seeker_agent):
