@@ -8,15 +8,13 @@ import random
 from config import get_config, DEVICE, TESTBED_OBS_DIM, TESTBED_ACTION_DIM
 from environment import NetworkEnv # <-- 'NetworkEnvironment'가 아니라 'NetworkEnv'입니다.
 from ppo import PPO
-from utils import Array2Tensor
+from utils import Array2Tensor, set_seed # --- [수정] set_seed Import ---
 from heuristic_seeker import HeuristicSeeker # 수정된 Seeker Import
 
 def main(args):
     
-    # --- 시드 고정 ---
-    torch.manual_seed(args.seed)
-    np.random.seed(args.seed)
-    random.seed(args.seed)
+    # --- [수정] set_seed 함수 사용 ---
+    set_seed(args.seed)
 
     # Environment
     env = NetworkEnv(args) # <-- 'NetworkEnvironment'가 아니라 'NetworkEnv'입니다.

@@ -4,6 +4,7 @@
 Utilities for MTD vs Seeker ARL Framework (v21)
 - [FIX] make_outdir가 'args' 인자를 받도록 수정
 - [ADD] args를 json 파일로 저장하는 기능 추가
+- [MERGE] Array2Tensor 함수 추가 (train_mtd_only.py 호환성)
 """
 
 import random
@@ -50,3 +51,9 @@ def make_outdir(level: str, args: argparse.Namespace) -> pathlib.Path:
         print(f"Warning: Could not save args_summary.json: {e}")
 
     return outdir
+
+# --- [MERGE] train_mtd_only.py가 요구하는 함수 ---
+def Array2Tensor(array, device):
+    """NumPy 배열을 지정된 device의 FloatTensor로 변환합니다."""
+    # .astype(np.float32)를 추가하여 PPO 모델이 기대하는 float32 타입으로 명시적으로 변환
+    return torch.tensor(array.astype(np.float32), device=device)
