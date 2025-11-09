@@ -6,7 +6,7 @@ import random
 
 # --- [핵심] 수정된 Config 파일 및 고정 인터페이스 Import ---
 from config import get_config, DEVICE, TESTBED_OBS_DIM, TESTBED_ACTION_DIM
-from environment import NetworkEnv
+from environment import NetworkEnv # <-- 'NetworkEnvironment'가 아니라 'NetworkEnv'입니다.
 from ppo import PPO
 from utils import Array2Tensor
 from heuristic_seeker import HeuristicSeeker # 수정된 Seeker Import
@@ -19,7 +19,7 @@ def main(args):
     random.seed(args.seed)
 
     # Environment
-    env = NetworkEnv(args)
+    env = NetworkEnv(args) # <-- 'NetworkEnvironment'가 아니라 'NetworkEnv'입니다.
     
     # Seeker (Attacker)
     seeker = HeuristicSeeker(args)
