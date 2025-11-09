@@ -1,69 +1,57 @@
-# File: MTD_RL/ver_01/heuristic_seeker.py
 import numpy as np
 import random
-from cti_bridge import CTIBridge # CTI 브리지 임포트
-import config
+
+# (Config_v21) Seeker 행동 레벨 (L0: Naive, L1: Scanner, L2: Stealthy)
+# --- [수정] Config_v21의 SEEKER_PARAMS 범위를 기반으로 5단계 강도 정의 ---
+# 'scan_effort' (min: 0.5, max: 2.0)
+# 'attack_bias' (min: 0.0, max: 1.0)
+SEEKER_BEHAVIOR_LEVELS = {
+    # L0 (매우 은밀): 스캔 최소, 공격 성향 최소
+    "L0": {"name": "L0 (Stealthy)",   "scan_effort": 0.8, "attack_bias": 0.2}, 
+    # L1 (소극적): 스캔 낮음, 공격 성향 낮음
+    "L1": {"name": "L1 (Low)",        "scan_effort": 0.5, "attack_bias": 0.3},
+    # L2 (중간): 기본값
+    "L2": {"name": "L2 (Moderate)",   "scan_effort": 1.0, "attack_bias": 0.5},
+    # L3 (공격적): 스캔 높음, 공격 성향 높음
+    "L3": {"name": "L3 (Aggressive)", "scan_effort": 1.5, "attack_bias": 0.8},
+    # L4 (스캐너): 스캔 최대, 공격 성향 최대
+    "L4": {"name": "L4 (Scanner)",    "scan_effort": 2.0, "attack_bias": 1.0}
+}
 
 class HeuristicSeeker:
-    """
-    MTD 상태와 CTI 정보를 기반으로 휴리스틱하게 공격을 선택하는 클래스.
-    MTD 전용 학습 루프 (train_mtd_only.py)에서 사용됩니다.
-    """
-    def __init__(self, cti_bridge: CTIBridge, action_dim: int):
-        self.cti = cti_bridge
-        self.action_dim = action_dim
-        print("HeuristicSeeker initialized.")
+    def __init__(self, args):
+        # --- [수정] Seeker 레벨 기본값을 L2(중간)로 변경 ---
+        level_config = SEEKER_BEHAVIOR_LEVELS.get(args.seeker_level, SEEKER_BEHAVIOR_LEVELS["L2"])
+        
+        # L0: Naive, L1: Scanner, L2: Stealthy
+        self.scan_effort = level_config["scan_effort"] # 스캔 시도 경향 (기본값 1.0)
+        self.attack_bias = level_config["attack_bias"] # 지식이 있을 때 공격 시도 경향
+        
+        # --- [수정] 출력 메시지에 레벨 이름 포함 ---
+        print(f"[Seeker] Initialized as {args.seeker_level} ({level_config['name']}): ScanEffort={self.scan_effort}, AttackBias={self.attack_bias}")
+        
+    def reset(self):
+        pass # Env가 Seeker 상태를 모두 관리하므로 reset할 필요 없음
 
-    def select_action(self, state: np.ndarray) -> int:
+    def select_action(self, mtd_params):
         """
-        주어진 상태(state)를 기반으로 최적의 공격(action)을 선택합니다.
-
-        Args:
-            state (np.ndarray): 현재 환경 상태.
-                                state의 마지막 'action_dim' 개가 MTD 설정으로 가정합니다.
-
-        Returns:
-            int: 선택된 공격 (0부터 action_dim - 1 사이의 정수).
+        MTD 파라미터를 기반으로 행동 결정 (scan, exploit, pass)
         """
         
-        # 1. CTI 정보에서 공격 우선순위 가져오기
-        # cti_bridge에 get_cti_priorities() 메소드가 있다고 가정합니다.
-        try:
-            # cti_bridge.py에 get_cti_priorities()가 구현되어 있어야 함
-            cti_priorities = self.cti.get_cti_priorities() # 예: [0.1, 0.5, 0.3, 0.8]
-            if cti_priorities is None or len(cti_priorities) != self.action_dim:
-                # CTI 정보가 없거나 차원이 맞지 않으면 랜덤 우선순위 생성
-                # print("Warning: CTI data invalid. Using random priorities.")
-                cti_priorities = np.random.rand(self.action_dim)
-        except AttributeError:
-            # cti_bridge.py에 get_cti_priorities()가 없는 경우
-            # print("Warning: get_cti_priorities() not found in CTIBridge. Using random priorities.")
-            cti_priorities = np.random.rand(self.action_dim)
-
-        # 2. 현재 MTD 상태 파악
-        # 상태 벡터의 마지막 N개가 MTD 설정이라고 가정합니다.
-        # (environment.py의 get_state() 로직과 일치해야 함)
-        current_mtd_config = state[-self.action_dim:] # 예: [0, 1, 0, 0] (1: 활성, 0: 비활성)
-
-        # 3. 휴리스틱 로직:
-        # - MTD가 활성화되지 *않은* 공격 벡터를 찾습니다.
-        # - 그 중에서 CTI 우선순위가 가장 높은 공격을 선택합니다.
+        knowledge = mtd_params["knowledge"]
         
-        unmitigated_attacks = []
-        for i in range(self.action_dim):
-            if current_mtd_config[i] == 0: # MTD 비활성 상태
-                unmitigated_attacks.append((i, cti_priorities[i])) # (공격 인덱스, CTI 우선순위)
+        # 1. 지식이 있고, 공격 성향이 높으면 공격(Exploit) 시도
+        if knowledge > 0.1 and random.random() < (self.attack_bias * knowledge):
+            return 'exploit'
+            
+        # 2. 스캔 시도
+        # 스캔 노력(scan_effort)이 높을수록, MTD 셔플(ip_cd)이 느릴수록 스캔 시도
+        ip_cd_factor = (mtd_params["ip_cd"] / 60.0) # 셔플이 느릴수록(60s) 1.0에 가까워짐
+        
+        scan_prob = np.clip(self.scan_effort * ip_cd_factor, 0.1, 1.0)
+        
+        if random.random() < scan_prob:
+            return 'scan'
 
-        if unmitigated_attacks:
-            # CTI 우선순위를 기준으로 내림차순 정렬
-            unmitigated_attacks.sort(key=lambda x: x[1], reverse=True)
-            # 우선순위가 가장 높은 공격 선택
-            best_attack = unmitigated_attacks[0][0]
-            # print(f"Heuristic choice: Unmitigated attack {best_attack} (CTI Prio: {unmitigated_attacks[0][1]})")
-            return best_attack
-        else:
-            # 4. 모든 공격이 MTD에 의해 방어되고 있는 경우:
-            # - CTI 우선순위가 가장 높은 공격을 선택 (MTD를 우회하려는 시도)
-            best_attack = np.argmax(cti_priorities)
-            # print(f"Heuristic choice: All mitigated. Attacking highest CTI prio {best_attack}")
-            return best_attack
+        # 3. 아무것도 안 함
+        return 'pass'
