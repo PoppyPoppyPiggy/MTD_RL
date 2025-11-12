@@ -16,8 +16,8 @@ SEEKER_LEVELS=("L0" "L1" "L2" "L3" "L4")
 MAX_EPISODES=1000
 
 # Google Drive 내의 기본 저장 경로 (원하는 경로로 수정 가능)
-BASE_LOG_DIR="/content/drive/MyDrive/MTD_RL_Testbed/logs"
-BASE_MODEL_DIR="/content/drive/MyDrive/MTD_RL_Testbed/models"
+BASE_LOG_DIR="/content/drive/MyDrive/MTD_RL_Testbed_v23/logs"
+BASE_MODEL_DIR="/content/drive/MyDrive/MTD_RL_Testbed_v23/models"
 
 for LEVEL in "${SEEKER_LEVELS[@]}"
 do
