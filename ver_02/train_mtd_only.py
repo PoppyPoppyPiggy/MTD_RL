@@ -3,8 +3,8 @@
 """
 MTD-only PPO Trainer (v2)
 - MTD_RL/ver_02
-- Trains MTD policy against a fixed (or heuristic) Seeker.
-- [MODIFIED] Added mtd_scoring.py logic to W&B logging.
+- [MODIFIED] ver_03의 argparse (get_args) 설정 방식을 사용하도록 수정
+- [MODIFIED] mtd_scoring.py와 동일한 W&B 로그 키/그룹 사용
 """
 
 import os
@@ -13,19 +13,19 @@ from datetime import datetime
 import torch
 import numpy as np
 import wandb
-from config import Config
+import argparse
+# [MODIFIED] Config 클래스 대신 get_args 함수와 TESTBED 차원 임포트
+from config import get_args, TESTBED_OBS_DIM, TESTBED_ACTION_DIM
 from environment import MTDEnv
 from ppo import PPO
 from utils import set_seed
 
-def train_mtd_only():
-    print("Starting MTD-only PPO Training (v2)")
+# main logic wrapped in a function to accept args
+def train_mtd_only(args):
+    print(f"Starting MTD-only PPO Training (v2) for Seeker Level: {args.seeker_level}")
 
     # --- 1. Load Configuration ---
-    config = Config()
-    env_config = config.ENV
-    train_config = config.TRAIN
-    ppo_config = config.PPO
+    # args는 main에서 이미 파싱됨
     
     # --- [MODIFIED] Load Scoring Weights (from mtd_scoring.yaml logic) ---
     W_S_D = 0.5  # w_deception_success
@@ -33,56 +33,57 @@ def train_mtd_only():
     W_C_M = 0.2  # w_mtd_cost
     # --- End Modification ---
 
-    set_seed(train_config['seed'])
+    set_seed(args.seed)
     
     # --- 2. Initialize Environment ---
-    env = MTDEnv(config)
+    # [MODIFIED] MTDEnv에 args 객체 전달
+    env = MTDEnv(args) 
     
-    state_dim = env.mtd_state_dim
-    action_dim = env.mtd_action_dim
+    state_dim = TESTBED_OBS_DIM   # config.py에서 임포트
+    action_dim = TESTBED_ACTION_DIM # config.py에서 임포트
     
     # --- 3. Initialize PPO Agent ---
-    device = torch.device(train_config['device'])
+    device = torch.device(args.device)
     ppo_agent = PPO(
         state_dim,
         action_dim,
-        ppo_config['lr'],
-        ppo_config['gamma'],
-        ppo_config['K_epochs'],
-        ppo_config['eps_clip'],
-        ppo_config['entropy_coef'],
+        args.lr,
+        args.gamma,
+        args.K_epochs,
+        args.eps_clip,
+        args.entropy_coef,
         device
     )
     
     # --- 4. W&B Initialization ---
-    run_name = f"mtd_only_train_{datetime.now().strftime('%Y%m%d_%H%M')}"
-    try:
-        wandb_run = wandb.init(
-            project=train_config['wandb_project'],
-            group=train_config['wandb_group'],
-            name=run_name,
-            config={
-                "train_config": train_config,
-                "ppo_config": ppo_config,
-                "env_config": env_config
-            }
-        )
-        print(f"W&B Run started: {run_name}")
-    except Exception as e:
-        print(f"Failed to initialize W&B: {e}")
+    run_name = f"mtd_only_train_{args.seeker_level}_{datetime.now().strftime('%Y%m%d_%H%M')}"
+    
+    # [MODIFIED] Use args for W&B project and group
+    if args.wandb:
+        try:
+            wandb_run = wandb.init(
+                project=args.project_name, # config.py의 --project_name
+                group=args.wandb_group,   # run_all_experiments.sh에서 전달
+                name=run_name,
+                config=vars(args) # Log command line arguments
+            )
+            print(f"W&B Run started: {run_name} (Group: {args.wandb_group})")
+        except Exception as e:
+            print(f"Failed to initialize W&B: {e}")
+            wandb_run = None
+    else:
         wandb_run = None
 
     # --- 5. Training Loop ---
     print(f"Starting training loop... Device: {device}")
     
-    # Training parameters
-    max_ep_len = train_config['max_ep_len']
-    max_training_timesteps = train_config['max_training_timesteps']
-    log_freq = train_config['log_freq']
-    save_model_freq = train_config['save_model_freq']
+    # Training parameters from args
+    max_ep_len = args.max_timesteps
+    log_freq = args.print_interval
+    save_model_freq = args.save_interval
     
-    # PPO update parameters
-    update_timestep = ppo_config['update_timestep']
+    # PPO update parameters from args
+    update_timestep = args.update_timestep
     
     time_step = 0
     i_episode = 0
@@ -106,7 +107,8 @@ def train_mtd_only():
 
     start_time = time.time()
 
-    while time_step < max_training_timesteps:
+    # [MODIFIED] Loop condition changed from timesteps to episodes
+    while i_episode < args.max_episodes:
         i_episode += 1
         state = env.reset()
         ep_reward = 0
@@ -191,21 +193,26 @@ def train_mtd_only():
         # Logging
         if i_episode % log_freq == 0:
             avg_ep_reward = avg_ep_reward / log_freq
-            avg_ep_loss_p = avg_ep_loss_p / (time_step / update_timestep) # Avg per update
-            avg_ep_loss_v = avg_ep_loss_v / (time_step / update_timestep)
-            avg_ep_entropy = avg_ep_entropy / (time_step / update_timestep)
+            
+            # [MODIFIED] PPO 업데이트가 발생한 경우에만 loss 평균 계산
+            update_counts = (time_step // update_timestep) - ((time_step - (t * log_freq)) // update_timestep)
+            if update_counts > 0:
+                avg_ep_loss_p = avg_ep_loss_p / update_counts
+                avg_ep_loss_v = avg_ep_loss_v / update_counts
+                avg_ep_entropy = avg_ep_entropy / update_counts
             
             # --- [MODIFIED] Calculate averages for scoring metrics ---
             avg_S_MTD = log_avg_S_MTD / log_freq
             avg_S_D = log_avg_S_D / log_freq
             avg_R_A = log_avg_R_A / log_freq
             avg_C_M = log_avg_C_M / log_freq
-            # Totals (N_R, N_A, T_A, T_D) are logged as totals for the period
             # --- End Modification ---
 
             # Log to W&B
             if wandb_run:
                 log_data = {
+                    # [MODIFIED] X축을 "General/global_step" (시간)이 아닌 "General/Timestep"으로 설정
+                    # mtd_scoring.py와 X축을 통일하려면 wandb.define_metric("General/Timestep") 필요
                     "General/Episode": i_episode,
                     "General/Timestep": time_step,
                     "General/Duration_min": (time.time() - start_time) / 60,
@@ -214,7 +221,7 @@ def train_mtd_only():
                     "Loss/Value_Loss": avg_ep_loss_v,
                     "Loss/Entropy": avg_ep_entropy,
                     
-                    # --- [MODIFIED] Add MTD Scoring Metrics ---
+                    # --- [MODIFIED] Add MTD Scoring Metrics (Keys identical to mtd_scoring.py) ---
                     "Metric/MTD_Score_Overall": avg_S_MTD,
                     "Metric/Metric_Deception_Success (S_D)": avg_S_D,
                     "Metric/Metric_Attack_Resilience (R_A)": avg_R_A,
@@ -248,17 +255,24 @@ def train_mtd_only():
 
         # Save model
         if i_episode % save_model_freq == 0:
+            # [MODIFIED] Use args for save path and policy name
             save_path = os.path.join(
-                train_config['model_save_dir'],
-                train_config['wandb_group'],
-                f"ppo_mtd_only_E{i_episode}_T{time_step}.pth"
+                args.save_dir,
+                args.policy_name
             )
             ppo_agent.save(save_path)
 
-    env.close() # Ensure env handles cleanup if needed
+    # [MODIFIED] Save final model
+    final_save_path = os.path.join(args.save_dir, args.policy_name)
+    ppo_agent.save(final_save_path)
+    print(f"Final model saved at: {final_save_path}")
+
+    # env.close() # MTDEnv에 close()가 정의되어 있지 않으면 주석 처리
     if wandb_run:
         wandb_run.finish()
     print("Training finished.")
 
+# [MODIFIED] Add main block with argparse
 if __name__ == '__main__':
-    train_mtd_only()
+    args = get_args() # config.py에서 인자 파싱
+    train_mtd_only(args)
