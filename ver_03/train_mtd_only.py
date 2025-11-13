@@ -94,7 +94,7 @@ def train(seeker_level, output_policy_path):
             
             # 에피소드 로그 기록
             log_episode_rewards.append(current_ep_reward)
-            log_mtd_actions.extend(info.get("mtd_action_id", 0)) # 예시 (실제로는 info에서 리스트로 받아야 함)
+            log_mtd_actions.append(info.get("mtd_action_id", 0)) # 예시 (실제로는 info에서 리스트로 받아야 함)
             log_s_d.append(info.get("s_d_cumulative", 0))
             log_r_a.append(info.get("r_a_cumulative", 0))
             log_c_m.append(info.get("c_m_cumulative", 0))
