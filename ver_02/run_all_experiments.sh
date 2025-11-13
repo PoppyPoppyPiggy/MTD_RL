@@ -21,8 +21,8 @@ MAX_EPISODES=1000
 
 Google Drive 내의 기본 저장 경로 (원하는 경로로 수정 가능)
 
-BASE_LOG_DIR="/content/drive/MyDrive/MTD_RL_Testbed_v25/logs"
-BASE_MODEL_DIR="/content/drive/MyDrive/MTD_RL_Testbed_v25/models"
+BASE_LOG_DIR="/content/drive/MyDrive/v25/logs"
+BASE_MODEL_DIR="/content/drive/MyDrive/v25/models"
 
 for LEVEL in "${SEEKER_LEVELS[@]}"
 do
