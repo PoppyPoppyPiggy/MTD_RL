@@ -15,7 +15,7 @@ import numpy as np
 import redis
 # [MODIFIED] Import get_seeker_policy_path and TESTBED dimensions
 from config import get_seeker_policy_path, TESTBED_OBS_DIM, TESTBED_ACTION_DIM
-from seeker import Seeker  # Seeker (Attacker)
+from seeker import SeekerHands  # Seeker (Attacker)
 from heuristic_seeker import HeuristicSeeker
 # CTI Bridge (from ver_01)
 import sys
