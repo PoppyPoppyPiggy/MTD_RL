@@ -2,6 +2,7 @@
 # 'rl/ver_02'의 train_mtd_only.py를 'rl/ver_03' 로드맵에 맞게 수정
 # - ver_03의 Environment, PPO, Config 사용
 # - Wandb 로깅 확장 (로드맵 4단계)
+# - 2025-11-13: 97번째 줄 TypeError 수정 (extend -> append)
 
 import torch
 import numpy as np
@@ -94,7 +95,8 @@ def train(seeker_level, output_policy_path):
             
             # 에피소드 로그 기록
             log_episode_rewards.append(current_ep_reward)
-            log_mtd_actions.append(info.get("mtd_action_id", 0)) # 예시 (실제로는 info에서 리스트로 받아야 함)
+            # [FIX] .extend()는 iterable 객체를 받지만, info.get()은 단일 int를 반환하므로 .append()로 수정
+            log_mtd_actions.append(info.get("mtd_action_id", 0)) 
             log_s_d.append(info.get("s_d_cumulative", 0))
             log_r_a.append(info.get("r_a_cumulative", 0))
             log_c_m.append(info.get("c_m_cumulative", 0))
