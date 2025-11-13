@@ -48,7 +48,7 @@ class MTDEnv:
             0: 'scan_ftp',
             1: 'scan_ssh',
             2: 'scan_http',
-            3:G 'scan_smb',
+            3: 'scan_smb',
             4: 'exploit',
             5: 'noop'
         }
