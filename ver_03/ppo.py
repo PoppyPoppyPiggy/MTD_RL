@@ -93,8 +93,11 @@ class PPO:
         self.buffer = []
 
     def select_action(self, state):
+        """
+        주어진 상태(state)에 대해 행동(action)을 선택 (학습 중 샘플링)
+        """
         with torch.no_grad():
-            state_tensor = torch.FloatTensor(state).to(config.DEVICE)
+            state_tensor = torch.FloatTensor(state).to(DEVICE) # <-- 'config.DEVICE'를 'DEVICE'로 수정
             
             # [!!! 수정 사항 !!!]
             # state_tensor가 1D(단일 상태)인 경우, 배치 차원(batch dimension)을 추가합니다.
