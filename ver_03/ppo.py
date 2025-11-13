@@ -94,39 +94,46 @@ class PPO:
 
     def select_action(self, state):
         with torch.no_grad():
-            state = torch.FloatTensor(state).to(DEVICE)
+            state_tensor = torch.FloatTensor(state).to(config.DEVICE)
             
-            # Actor forward
-            discrete_logits, continuous_mu, continuous_std = self.actor(state)
+            # [!!! 수정 사항 !!!]
+            # state_tensor가 1D(단일 상태)인 경우, 배치 차원(batch dimension)을 추가합니다.
+            # (예: [11] -> [1, 11])
+            if state_tensor.dim() == 1:
+                state_tensor = state_tensor.unsqueeze(0)
             
-            # 1. Discrete Action 샘플링
+            # 이제 state_tensor는 항상 [N, 11] 형태가 됩니다 (여기서는 N=1).
+            discrete_logits, continuous_mu, continuous_std = self.actor(state_tensor)
+            
+            # 1. Discrete action sampling
             dist_discrete = Categorical(logits=discrete_logits)
-            action_discrete = dist_discrete.sample()
-            action_discrete_logprob = dist_discrete.log_prob(action_discrete)
+            action_discrete = dist_discrete.sample() # Shape [1]
             
-            # 2. Continuous Action 샘플링
+            # 2. Continuous action sampling
             dist_continuous = Normal(continuous_mu, continuous_std)
-            # 0~1 사이로 클리핑 (환경의 action_space와 일치)
-            action_continuous = dist_continuous.sample().clamp(0.0, 1.0) 
-            action_continuous_logprob = dist_continuous.log_prob(action_continuous).sum(dim=-1) # 로그 확률 합
+            action_continuous = dist_continuous.sample() # Shape [1, 2]
+            action_continuous_clipped = torch.clamp(action_continuous, 0, 1) # 0~1
             
-            # 3. Value 획득
-            value = self.critic(state)
+            # 3. Log-Prob 및 Value 계산
+            log_prob_discrete = dist_discrete.log_prob(action_discrete)
+            log_prob_continuous = dist_continuous.log_prob(action_continuous).sum(dim=-1)
+            log_prob = log_prob_discrete + log_prob_continuous
             
-            # 환경에 전달할 action 딕셔너리
+            value = self.critic(state_tensor)
+            
+            # 4. Format for storage and environment
+            action_store = {
+                "discrete": action_discrete.squeeze(), # [1] -> 스칼라
+                "continuous": action_continuous.squeeze(0) # [1, 2] -> [2]
+            }
+            
             action_env = {
                 "discrete": action_discrete.cpu().item(),
-                "continuous": action_continuous.cpu().numpy().flatten()
+                "continuous": action_continuous_clipped.cpu().numpy().flatten()
             }
             
-            # 버퍼에 저장할 텐서들
-            action_store = {
-                "discrete": action_discrete,
-                "continuous": action_continuous
-            }
-            logprob_store = action_discrete_logprob + action_continuous_logprob # 총 로그 확률
-            
-            return action_env, action_store, logprob_store, value
+            return action_env, action_store, log_prob.cpu().item(), value.cpu().item()
+
 
     def update(self):
         # 1. GAE (Generalized Advantage Estimation) 계산
