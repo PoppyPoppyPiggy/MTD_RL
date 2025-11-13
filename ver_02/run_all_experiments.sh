@@ -36,7 +36,7 @@ LOG_PATH="${BASE_LOG_DIR}/${LEVEL}_Seeker"
 MODEL_PATH="${BASE_MODEL_DIR}/${LEVEL}_Seeker"
 POLICY_NAME="defender_policy_${LEVEL}.pth"
 
-# [수정] train_mtd_only.py (v23)를 실행
+# [수정] train_mtd_only.py (v25)를 실행
 python train_mtd_only.py \
     --wandb \
     --log_dir $LOG_PATH \
