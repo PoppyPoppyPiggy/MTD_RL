@@ -9,7 +9,7 @@ import torch.nn.functional as F
 import numpy as np
 
 # ver_03 config 임포트
-from ver_03.config import DEVICE, PPOConfig
+from config import DEVICE, PPOConfig
 
 config = PPOConfig()
 

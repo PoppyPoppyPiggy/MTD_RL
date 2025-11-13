@@ -9,11 +9,12 @@ import time
 import os
 import pandas as pd
 import wandb
+import argparse # <-- 인자 처리를 위해 추가
 
 # ver_03 임포트
-from ver_03.environment import MTDEnv
-from ver_03.ppo import PPO
-from ver_03.config import (
+from environment import MTDEnv
+from ppo import PPO
+from config import (
     PPOConfig, DEVICE, SEED, WANDB_PROJECT,
     MAX_TIMESTEPS, SAVE_MODEL_FREQ, LOG_DATA_FREQ, TARGET_AVG_REWARD
 )
@@ -22,15 +23,18 @@ from ver_03.config import (
 torch.manual_seed(SEED)
 np.random.seed(SEED)
 
-def train():
+def train(seeker_level, output_policy_path):
     print(f"--- MTD RL Training (ver_03) ---")
+    print(f"Seeker Level: {seeker_level}")
+    print(f"Output Policy: {output_policy_path}")
     print(f"Device: {DEVICE}, Seed: {SEED}")
     
     # 1. Wandb 초기화 (로드맵 4단계)
-    wandb.init(project=WANDB_PROJECT, config=PPOConfig().__dict__)
+    # 각 레벨별로 wandb run 이름 지정
+    wandb.init(project=WANDB_PROJECT, config=PPOConfig().__dict__, name=f"L{seeker_level}_Seeker_v3")
     
     # 2. 환경 및 PPO 에이전트 초기화
-    env = MTDEnv()
+    env = MTDEnv(seeker_level=seeker_level) # <-- 시커 레벨 전달
     config = PPOConfig() # PPO 설정 로드
     
     ppo_agent = PPO(
@@ -40,7 +44,7 @@ def train():
     )
     
     # 모델 저장 경로
-    model_dir = "models/ver_03"
+    model_dir = os.path.dirname(output_policy_path) # <-- 인자에서 경로 추출
     os.makedirs(model_dir, exist_ok=True)
     
     # 로그 기록용 변수
@@ -135,17 +139,41 @@ def train():
         # 3.7 모델 저장
         if t % SAVE_MODEL_FREQ == 0:
             print(f"--- Saving model at timestep {t} ---")
-            ppo_agent.save(f"{model_dir}/ppo_mtd_v3_{t}.pth")
+            # 중간 저장 모델 경로
+            intermediate_path = output_policy_path.replace(".pth", f"_step_{t}.pth")
+            ppo_agent.save(intermediate_path)
 
-        # 3.8 학습 종료 조건
-        if avg_reward > TARGET_AVG_REWARD:
+        # 3.8 학습 종료 조건 (TARGET_AVG_REWARD 도달 시)
+        if log_running_episodes > 100 and avg_reward > TARGET_AVG_REWARD:
              print(f"--- Target average reward {TARGET_AVG_REWARD} reached! Stopping training. ---")
-             ppo_agent.save(f"{model_dir}/ppo_mtd_v3_final.pth")
+             ppo_agent.save(output_policy_path) # <-- 최종 경로에 저장
              break
+    
+    # 3.9 (수정) Max Timestep 도달 시 최종 저장
+    if t >= MAX_TIMESTEPS:
+        print(f"--- Max timesteps {MAX_TIMESTEPS} reached. Saving final model. ---")
+        ppo_agent.save(output_policy_path)
 
     env.close()
     wandb.finish()
-    print("--- MTD RL Training (ver_03) Finished ---")
+    print(f"--- MTD RL Training (ver_03) Finished for L{seeker_level} ---")
 
 if __name__ == "__main__":
-    train()
+    # 셸 스크립트에서 인자를 받도록 argparse 추가
+    parser = argparse.ArgumentParser(description="Train MTD RL agent (ver_03)")
+    parser.add_argument(
+        "--seeker_level",
+        type=int,
+        default=0,
+        help="Seeker sophistication level (0-4)"
+    )
+    parser.add_argument(
+        "--output_policy",
+        type=str,
+        default=f"models/ver_03/L0_Seeker_v3/defender_policy_v3_L0.pth",
+        help="Path to save the final trained policy"
+    )
+    args = parser.parse_args()
+    
+    # 인자를 train 함수로 전달
+    train(seeker_level=args.seeker_level, output_policy_path=args.output_policy)

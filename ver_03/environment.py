@@ -11,7 +11,7 @@ import random
 import logging
 
 # ver_03 config 임포트
-from ver_03.config import (
+from config import (
     STATE_DIM, DISCRETE_ACTION_DIM, CONTINUOUS_ACTION_DIM, 
     REWARD_WEIGHTS, MAX_EPISODE_STEPS, DEVICE,
     ATTACKER_SCAN_INTERVAL, SERVICE_DOWNTIME_PENALTY, MTD_ACTION_COST
@@ -89,10 +89,11 @@ class ThreatMonitor:
     'Seeker'의 행동(스캔)을 시뮬레이션하고 '공격 스캔 히트맵' 데이터를 생성.
     (로드맵 2단계 - 'Seeker 스캔 로깅' 및 '로그 파서'의 시뮬레이션 버전)
     """
-    def __init__(self):
+    def __init__(self, seeker_level=0):
         self.real_ip = "10.0.0.10"
         self.decoy_ips = ["10.0.0.100", "10.0.0.101"]
         self.current_target_ip = self.real_ip # 공격자의 현재 타겟
+        self.seeker_level = seeker_level
         self.reset()
 
     def reset(self):
@@ -121,8 +122,14 @@ class ThreatMonitor:
                 else:
                     # 타겟을 잃고 활성 디코이 중 하나를 스캔
                     if self.active_decoys:
-                        self.current_target_ip = random.choice(self.active_decoys)
-                        logger.debug(f"[ThreatMonitor] Seeker lost target, scanning decoy {self.current_target_ip}")
+                        # L0-L2 (레벨 3 미만)는 디코이를 스캔함
+                        if self.seeker_level < 3:
+                            self.current_target_ip = random.choice(self.active_decoys)
+                            logger.debug(f"[ThreatMonitor] Seeker L{self.seeker_level} lost target, scanning decoy {self.current_target_ip}")
+                        else:
+                            # L3+ 는 디코이를 인지하고 스캔하지 않음 (회피)
+                            self.current_target_ip = self.real_ip # (가정: 즉시 재탐색)
+                            logger.debug(f"[ThreatMonitor] Seeker L{self.seeker_level} avoided decoy, re-targeting real IP.")
                 self.ip_shuffled = False # IP 셔플 효과 1회성으로 처리
 
             # 스캔 수행
@@ -251,14 +258,15 @@ class MTDEnv(gym.Env):
     """
     로드맵에 따라 재설계된 rl/ver_03 MTD 강화학습 환경
     """
-    def __init__(self, seeker_policy=None):
+    def __init__(self, seeker_level=0, seeker_policy=None):
         super(MTDEnv, self).__init__()
         
         # 1. Scorer, Monitor, Executor 통합 (로드맵 1단계)
         self.scorer = Scorer(REWARD_WEIGHTS)
-        self.threat_monitor = ThreatMonitor()
+        self.threat_monitor = ThreatMonitor(seeker_level=seeker_level)
         self.mtd_executor = MTDExecutor()
         
+        self.seeker_level = seeker_level
         # (시커 로직은 단순 시뮬레이션으로 대체됨)
         # self.seeker_policy = seeker_policy 
 
