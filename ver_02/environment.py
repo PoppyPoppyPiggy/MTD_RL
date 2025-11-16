@@ -15,18 +15,26 @@ import numpy as np
 import redis
 # [MODIFIED] Import get_seeker_policy_path and TESTBED dimensions
 from config import get_seeker_policy_path, TESTBED_OBS_DIM, TESTBED_ACTION_DIM
-from seeker import SeekerHands  # Seeker (Attacker)
-from heuristic_seeker import HeuristicSeeker
+# [MODIFIED] Defer Seeker imports to fix potential circular dependency
+# from seeker import Seeker # Seeker (Attacker)
+# from heuristic_seeker import HeuristicSeeker
 # CTI Bridge (from ver_01)
 import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'ver_01'))
-from cti_bridge import CTI_Bridge
+# [MODIFIED] Defer CTI Bridge import to fix potential circular dependency
+# from cti_bridge import CTI_Bridge
 
 class MTDEnv:
     # [MODIFIED] __init__ now accepts 'args' from argparse
     def __init__(self, args):
         print("Initializing MTDEnv (v2, argparse-compatible)...")
         self.args = args # Store args
+        
+        # [MODIFIED] Import Seekers here to avoid circular import
+        from seeker import SeekerHands # Seeker (Attacker)
+        from heuristic_seeker import HeuristicSeeker
+        # [MODIFIED] Import CTI_Bridge here to avoid circular import
+        from cti_bridge import CTI_Bridge
         
         # Action/State space dimensions from config.py
         self.mtd_action_dim = TESTBED_ACTION_DIM
@@ -68,7 +76,8 @@ class MTDEnv:
         if args.seeker_level == "L0" or seeker_policy_path is None:
             print("Using HeuristicSeeker (L0 or policy file not found)")
             self.seeker_strategy = 'heuristic'
-            self.seeker = HeuristicSeeker(self.seeker_state_dim, self.seeker_action_dim, self.args)
+            # [MODIFIED] HeuristicSeeker는 args만 받도록 수정 (기존 4개 인자 전달 오류)
+            self.seeker = HeuristicSeeker(self.args)
         else:
             print(f"Using RL Seeker (Policy: {seeker_policy_path})")
             self.seeker_strategy = 'rl'
